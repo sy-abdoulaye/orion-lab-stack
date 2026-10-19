@@ -1,0 +1,50 @@
+# ============================================================
+# compose.yml — Documentation Orion conteneurisée (nginx)
+# Accessible depuis l'IP de l'hôte sur le port 8090.
+#
+# Déployée sur la VM lorion03vel : incluse dans l'`include` du
+# docker-compose.yml parent (lorion03vel/), donc pilotée par le
+# Makefile de la VM (make up / down) comme les autres services.
+# Le réseau lorion03vel-network (external) est créé par `make network`.
+#
+# Usage autonome (hors include) :
+#   cp .env.example .env   # (renseigner le proxy de build si besoin)
+#   docker network create lorion03vel-network   # si absent (hors VM)
+#   docker compose up -d --build
+#   -> http://<IP_HOTE>:8090
+# ============================================================
+
+name: orion-stack-documentation
+
+services:
+  docs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Le build (pip install mkdocs-material) a besoin d'Internet -> proxy en build-arg.
+      args:
+        http_proxy: ${BUILD_HTTP_PROXY:-}
+        https_proxy: ${BUILD_HTTPS_PROXY:-}
+    # Nom versionné explicite (namespace local "orion/"). Bump IMAGE_TAG dans
+    # .env à chaque évolution -> l'ancienne image reste dispo pour rollback.
+    image: orion/stack-docs:${IMAGE_TAG:-0.1.0}
+    container_name: orion-stack-docs
+    restart: unless-stopped
+    ports:
+      # <port_hôte>:<port_conteneur>. Adapter le port hôte si 8090 est occupé.
+      - "8090:80"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    # Rattaché au réseau partagé de la VM : évite qu'un réseau "default"
+    # implicite soit créé rien que pour ce service (subnets maîtrisés).
+    networks:
+      - lorion03vel-network
+
+networks:
+  lorion03vel-network:
+    name: lorion03vel-network
+    external: true

@@ -1,0 +1,4 @@
+mkdocs-material==9.5.44
+# 10.21.3 : corrige un bug de 10.11.2 où un commentaire `#` dans un bloc de code
+# imbriqué (admonition / onglet) cassait le rendu du fence.
+pymdown-extensions==10.21.3

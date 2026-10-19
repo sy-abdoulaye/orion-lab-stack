@@ -1,0 +1,23 @@
+name: lorion03vel
+
+include:
+  - path: clickhouse/compose.yml
+    env_file: clickhouse/.env
+  - path: neo4j/compose.yml
+    env_file: neo4j/.env
+  - path: netbox-neo4j-sync/compose.yml
+    env_file: netbox-neo4j-sync/.env
+  - path: gobgp-neo4j-sync/compose.yml
+    env_file: gobgp-neo4j-sync/.env
+  # Portail de documentation (nginx :8090) — vit à la racine du dépôt car il
+  # documente toute la plateforme, mais il est HÉBERGÉ sur cette VM.
+  - path: ../orion-stack-documentation/compose.yml
+    env_file: ../orion-stack-documentation/.env
+
+  - path:
+      - netbox-docker/docker-compose.yml
+      - netbox-docker/docker-compose.override.yml
+networks:
+  lorion03vel-network:
+    name: lorion03vel-network
+    external: true

@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- Surcharges spécifiques à lorion03vel.
+     Ce fichier est FUSIONNÉ par-dessus le config.xml par défaut de l'image
+     (répertoire /etc/clickhouse-server/config.d/). Ne jamais remplacer le
+     config.xml racine par un fichier partiel : ClickHouse refuserait de démarrer. -->
+<clickhouse>
+    <!-- IMPORTANT : en montant ce dossier ./config/config.d sur
+         /etc/clickhouse-server/config.d, on masque le docker_related_config.xml
+         de l'image qui ouvrait l'écoute réseau. Il faut donc rétablir listen_host
+         ici, sinon ClickHouse n'écoute que sur le loopback du conteneur et le
+         mapping de ports Docker renvoie « Connection reset by peer ».
+         Hôte IPv6 désactivé -> on n'écoute que sur IPv4 0.0.0.0. -->
+    <listen_host>0.0.0.0</listen_host>
+
+    <logger>
+        <level>information</level>
+    </logger>
+    <display_name>lorion03vel</display_name>
+</clickhouse>

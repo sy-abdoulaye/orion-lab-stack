@@ -1,0 +1,72 @@
+services:
+  neo4j:
+    # Image officielle via le miroir interne (préfixe paramétré : une seule
+    # variable à changer si le registre évolue).
+    image: ${REGISTRY:-registry.example.com/dockerhub}/${IMAGE_NEO4J:-neo4j:5.26.0}
+    container_name: ${NEO4J_CONTAINER:-lorion03vel-neo4j}
+    restart: unless-stopped
+    environment:
+      # Values defined in neo4j/.env (loaded via the include of the parent docker-compose.yml)
+      TZ: ${TZ:-Europe/Paris}
+      # The password is read from the secret file (mounted via `secrets:`),
+      # so there are no longer any plaintext passwords in the configuration.
+      NEO4J_AUTH_FILE: ${NEO4J_AUTH_FILE:-/run/secrets/neo4j_auth}
+      # Plugins (APOC + GDS) installed offline via the ./plugins folder mounted at /plugins
+      # (the container has no internet access -> NEO4J_PLUGINS / automatic download not possible).
+      # Permissions required to load APOC and GDS procedures:
+      NEO4J_dbms_security_procedures_unrestricted: ${NEO4J_dbms_security_procedures_unrestricted:-apoc.*,gds.*}
+      NEO4J_dbms_security_procedures_allowlist: ${NEO4J_dbms_security_procedures_allowlist:-apoc.*,gds.*}
+      # Memory settings for Neo4j, defined in neo4j/.env
+      # For more information on configuring Neo4j memory, see the Neo4j documentation: https://neo4j.com/docs/operations-manual/current/performance/memory-configuration/
+      # Memory used by the page cache to contain the graph data in memory (default: 512M)
+      NEO4J_server_memory_pagecache_size: ${NEO4J_server_memory_pagecache_size:-512M}
+      # Initial and maximum heap size used by the JVM for executing the Neo4j server (default: 512M)
+      NEO4J_server_memory_heap_initial__size: ${NEO4J_server_memory_heap_initial__size:-512M}
+      NEO4J_server_memory_heap_max__size: ${NEO4J_server_memory_heap_max__size:-512M}
+    ports:
+      - "7474:7474" # HTTP interface
+      - "7687:7687" # Bolt interface
+    volumes:
+      # Mounting volumes for Neo4j data, logs, and configuration files
+      # For more information on volume mounting, refer to the Docker documentation: https://docs.docker.com/storage/volumes/
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/import
+      # plugins folder mounted at /plugins for offline installation of APOC and GDS plugins
+      - ./plugins:/plugins
+      # - ./config/neo4j.conf:/var/lib/neo4j/conf/
+    healthcheck:
+      # Test via cypher-shell (curl n'est pas présent dans l'image neo4j).
+      # Le mot de passe est lu au runtime depuis le secret monté (pas de clair en config).
+      test:
+        [
+          "CMD-SHELL",
+          "cypher-shell -u ${NEO4J_USER:-neo4j} -p \"$$(cut -d/ -f2 /run/secrets/neo4j_auth)\" 'RETURN 1' || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    # Setting ulimits for the Neo4j container to ensure it has sufficient resources
+    # For more information on ulimits, refer to the Docker documentation: https://docs.docker.com/engine/reference/run/#runtime-constraints-on-resources
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    networks:
+      - lorion03vel-network
+    secrets:
+      - neo4j_auth
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
+
+networks:
+  lorion03vel-network:
+    name: lorion03vel-network
+    external: true
+
+secrets:
+  neo4j_auth:
+    file: ./secrets/neo4j_auth

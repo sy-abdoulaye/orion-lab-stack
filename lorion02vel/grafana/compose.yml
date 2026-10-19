@@ -1,0 +1,120 @@
+# ============================================================
+# compose.yml — Grafana (lorion02vel)
+# ============================================================
+# Visualisation des données de la plateforme (ClickHouse lorion03vel via le
+# port publié inter-VM). Même pattern que les autres stacks :
+#   - image via le miroir interne (pas d'internet dans les conteneurs),
+#   - plugin ClickHouse installé AU BUILD via le proxy (BUILD_HTTP_PROXY),
+#   - secrets en fichiers (./secrets/, hors git) montés via `secrets:`,
+#   - réseau partagé de la VM (lorion02vel-network, external, géré par make).
+#
+# Gestion des utilisateurs : admin bootstrap via secret, inscription fermée
+# (rôle Viewer par défaut pour tout compte créé) — voir ./manage-users.sh
+# et README.md.
+# ============================================================
+
+services:
+  grafana:
+    build:
+      context: .
+      # Le build a besoin d'internet (catalogue de plugins Grafana) : le proxy
+      # est transmis en build-arg, comme pour les images netbox-neo4j-sync.
+      args:
+        REGISTRY: ${REGISTRY:-registry.example.com/dockerhub}
+        GRAFANA_VERSION: ${GRAFANA_VERSION:-12.1.1}
+        http_proxy: ${BUILD_HTTP_PROXY:-}
+        https_proxy: ${BUILD_HTTPS_PROXY:-}
+    # Nom versionné explicite (namespace local "orion/", jamais le préfixe du
+    # miroir : pull-only). Bump IMAGE_TAG dans .env à chaque évolution.
+    image: orion/grafana-clickhouse:${IMAGE_TAG:-12.1.1-1}
+    container_name: ${GRAFANA_CONTAINER:-lorion02vel-grafana}
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Europe/Paris}
+
+      # ── Serveur ──────────────────────────────────────────────
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://10.10.2.11:3000/}
+
+      # ── Sécurité : admin bootstrap + clé de signature via secrets ─────
+      # Convention Grafana `__FILE` : la valeur est lue dans le fichier monté,
+      # aucun secret en clair dans ce fichier ni dans .env.
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SECURITY_SECRET_KEY__FILE: /run/secrets/grafana_secret_key
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      # HTTP interne au lab : passer à true si un jour derrière TLS.
+      GF_SECURITY_COOKIE_SECURE: "false"
+
+      # ── Gestion des utilisateurs ─────────────────────────────
+      # Pas d'auto-inscription ; tout compte est créé par l'admin
+      # (UI ou ./manage-users.sh) et naît Viewer (lecture seule).
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      GF_USERS_AUTO_ASSIGN_ORG: "true"
+      GF_USERS_AUTO_ASSIGN_ORG_ROLE: Viewer
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Basic auth conservé : utilisé par l'API (manage-users.sh).
+      GF_AUTH_BASIC_ENABLED: "true"
+
+      # ── Lab isolé : aucun appel sortant ──────────────────────
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_SNAPSHOTS_EXTERNAL_ENABLED: "false"
+
+      # ── Datasource ClickHouse (provisioning/datasources/clickhouse.yml) ──
+      # Interpolées dans le YAML de provisioning ; le mot de passe est exporté
+      # depuis le secret par l'entrypoint (cf. entrypoint-secrets.sh).
+      CLICKHOUSE_GRAFANA_HOST: ${CLICKHOUSE_GRAFANA_HOST:-10.10.3.141}
+      CLICKHOUSE_GRAFANA_PORT: ${CLICKHOUSE_GRAFANA_PORT:-9000}
+      CLICKHOUSE_GRAFANA_USER: ${CLICKHOUSE_GRAFANA_USER:-grafana}
+      CLICKHOUSE_GRAFANA_DB: ${CLICKHOUSE_GRAFANA_DB:-gobgp}
+      CLICKHOUSE_GRAFANA_PASSWORD__FILE: /run/secrets/clickhouse_grafana_password
+    ports:
+      - "${GRAFANA_HTTP_PORT:-3000}:3000"
+    volumes:
+      # Données (utilisateurs, dashboards édités, sessions) : volume nommé.
+      - grafana_data:/var/lib/grafana
+      # Provisioning déclaratif (datasources + providers de dashboards).
+      - ./provisioning:/etc/grafana/provisioning:ro
+      # Dashboards versionnés dans le dépôt, chargés par le provider.
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+    secrets:
+      - grafana_admin_password
+      - grafana_secret_key
+      - clickhouse_grafana_password
+    healthcheck:
+      # wget busybox de l'image alpine ; /api/health ne demande pas d'auth.
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:3000/api/health",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - lorion02vel-network
+
+volumes:
+  grafana_data:
+
+networks:
+  lorion02vel-network:
+    external: true
+
+# Secrets en clair stockés hors git (./secrets/, chmod 600) — même pattern
+# que clickhouse/ et netbox-neo4j-sync/ sur lorion03vel.
+secrets:
+  grafana_admin_password:
+    file: ./secrets/grafana_admin_password
+  grafana_secret_key:
+    file: ./secrets/grafana_secret_key
+  clickhouse_grafana_password:
+    file: ./secrets/clickhouse_grafana_password

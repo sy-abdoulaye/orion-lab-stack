@@ -1,0 +1,22 @@
+*.sql.gz
+.netbox
+.python-version
+# docker-compose.override.yml is tracked (local customizations)
+*.pem
+configuration/*
+!configuration/configuration.py
+!configuration/extra.py
+configuration/ldap/*
+!configuration/ldap/extra.py
+!configuration/ldap/ldap_config.py
+!configuration/logging.py
+!configuration/plugins.py
+super-linter.log
+
+# Secrets (env files with real credentials)
+env/*.env
+!env/*.env.example
+
+# Claude
+CLAUDE.md
+.claude/

@@ -1,0 +1,92 @@
+services:
+  # ClickHouse service configuration
+  # For more information, refer to the official ClickHouse Docker image documentation: https://hub.docker.com/r/clickhouse/clickhouse-server
+  # Make sure to adjust the environment variables, volumes, and ports according to your specific requirements.
+  clickhouse:
+    # Image officielle via le miroir interne (préfixe paramétré : une seule
+    # variable à changer si le registre évolue).
+    image: ${REGISTRY:-registry.example.com/dockerhub}/clickhouse/clickhouse-server:25.6-alpine
+    container_name: ${CLICKHOUSE_CONTAINER:-lorion03vel-clickhouse}
+    restart: unless-stopped
+    environment:
+      # Valeurs définies dans clickhouse/.env (chargé via l'include du docker-compose.yml parent)
+      TZ: ${TZ:-Europe/Paris}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      # CLICKHOUSE_USER + le secret ci-dessous ne servent QU'À l'init (l'init s'y
+      # connecte). L'utilisateur lui-même est défini, chiffré, dans
+      # config/users.d/lorion03vel.xml — d'où SKIP_USER_SETUP ci-dessous.
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      # Le mot de passe est lu depuis le fichier secret (monté via `secrets:`),
+      # plus aucun mot de passe en clair dans la config.
+      CLICKHOUSE_PASSWORD_FILE: ${CLICKHOUSE_PASSWORD_FILE:-/run/secrets/clickhouse_password}
+      # Empêche l'entrypoint de (re)créer l'utilisateur en CLAIR et de toucher
+      # à 'default' : on gère tout via les fichiers XML de users.d.
+      CLICKHOUSE_SKIP_USER_SETUP: ${CLICKHOUSE_SKIP_USER_SETUP:-1}
+    ports:
+      - "8123:8123" # HTTP interface
+      - "9000:9000" # Native interface
+    volumes:
+      # Mounting volumes for ClickHouse data, logs, and configuration files
+      # For more information on volume mounting, refer to the Docker documentation: https://docs.docker.com/storage/volumes/
+      - clickhouse_data:/var/lib/clickhouse
+      # - clickhouse_logs:/var/log/clickhouse-server
+
+      # - ./config/users.xml:/etc/clickhouse-server/users.xml
+      # - ./config/config.xml:/etc/clickhouse-server/config.xml
+
+      # # Surcharges fusionnées par-dessus la config par défaut (ne PAS remplacer config.xml/users.xml)
+      - ./config/config.d:/etc/clickhouse-server/config.d:ro
+      # Utilisateur admin statique (mot de passe chiffré). Monté comme FICHIER
+      # unique (pas le dossier) pour ne pas masquer le default-user.xml généré
+      # par l'entrypoint pour l'utilisateur applicatif.
+      - ./config/users.d/admin.xml:/etc/clickhouse-server/users.d/admin.xml:ro
+      # Utilisateur applicatif lorion03vel, chiffré (remplace la création par env)
+      - ./config/users.d/lorion03vel.xml:/etc/clickhouse-server/users.d/lorion03vel.xml:ro
+      # Scripts SQL d'initialisation (schéma + rôles), exécutés au 1er démarrage
+      - ./init:/docker-entrypoint-initdb.d:ro
+    ulimits:
+      # Setting ulimits for the ClickHouse container to ensure it has sufficient resources
+      # For more information on ulimits, refer to the Docker documentation: https://docs.docker.com/engine/reference/run/#runtime-constraints-on-resources
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      # Healthcheck configuration to ensure the ClickHouse service is running properly
+      # For more information on healthchecks, refer to the Docker documentation: https://docs.docker.com/engine/reference/builder/#healthcheck
+      # Endpoint /ping : sans authentification (ne dépend d'aucun mot de passe,
+      # contrairement à `clickhouse-client SELECT 1` qui hérite de CLICKHOUSE_USER).
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:8123/ping",
+        ]
+      # The healthcheck will run every 10 seconds, with a timeout of 5 seconds,
+      # and will retry up to 5 times before considering the service unhealthy.
+      # The start_period is set to 30 seconds to allow the service to initialize before health checks begin.
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - lorion03vel-network
+    # Secret monté dans le conteneur à /run/secrets/clickhouse_password
+    secrets:
+      - clickhouse_password
+
+volumes:
+  clickhouse_data:
+
+networks:
+  lorion03vel-network:
+    external: true
+
+# Secrets en clair stockés hors git (./secrets/, chmod 600).
+# Le secret admin n'est PAS déclaré ici : il n'est lu que côté hôte par
+# manage-users.sh (le conteneur n'en a pas besoin).
+secrets:
+  clickhouse_password:
+    file: ./secrets/clickhouse_password

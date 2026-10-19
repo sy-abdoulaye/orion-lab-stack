@@ -1,0 +1,27 @@
+/* Ajustements légers par-dessus le thème Material. */
+
+/* Largeur de contenu un peu plus confortable pour les tableaux denses. */
+.md-grid {
+  max-width: 62rem;
+}
+
+/* Étiquettes de statut réutilisables dans les pages (via attr_list). */
+.status {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.status-active { background: #1b5e20; color: #fff; }
+.status-disabled { background: #b26a00; color: #fff; }
+.status-external { background: #303f9f; color: #fff; }
+.status-planned { background: #455a64; color: #fff; }
+
+/* Diagrammes Mermaid centrés. */
+.mermaid {
+  text-align: center;
+}

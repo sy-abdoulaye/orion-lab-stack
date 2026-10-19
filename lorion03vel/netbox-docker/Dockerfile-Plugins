@@ -1,0 +1,18 @@
+ARG VERSION=v4.5.4-4.0.1
+FROM registry.example.com/dockerhub/netboxcommunity/netbox:${VERSION}
+
+RUN sed -i 's|--host "::"|--host "0.0.0.0"|' /opt/netbox/launch-netbox.sh
+
+COPY ./plugin_requirements.txt /opt/netbox/
+RUN /usr/local/bin/uv pip install -r /opt/netbox/plugin_requirements.txt
+
+COPY configuration/plugins.py /etc/netbox/config/plugins.py
+
+# These lines are only required if your plugin has its own static files.
+COPY configuration/configuration.py /etc/netbox/config/configuration.py
+COPY configuration/plugins.py /etc/netbox/config/plugins.py
+
+RUN mkdir -p /opt/netbox/netbox/static/netbox_topology_views/img
+
+RUN DEBUG="true" SECRET_KEY="dummydummydummydummydummydummydummydummydummydummy" \
+    /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py collectstatic --no-input

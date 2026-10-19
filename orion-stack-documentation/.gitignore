@@ -1,0 +1,10 @@
+# Sortie de build MkDocs
+site/
+
+# Environnements Python
+.venv/
+__pycache__/
+*.pyc
+
+# Config d'environnement locale (proxy de build) — utiliser .env.example
+.env

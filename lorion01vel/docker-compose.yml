@@ -1,0 +1,11 @@
+name: lorion01vel
+
+include:
+  - path: gobgp/compose.yml
+    env_file: gobgp/.env
+  - path: vector/compose.yml
+
+networks:
+  lorion01vel-network:
+    name: lorion01vel-network
+    external: true

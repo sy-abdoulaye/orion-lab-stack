@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!-- ============================================================
+     Utilisateur applicatif lorion03vel défini en XML (mot de passe chiffré).
+     Remplace la création par variable d'env (qui stockait le mot de passe
+     EN CLAIR). Avec CLICKHOUSE_SKIP_USER_SETUP=1, l'entrypoint ne génère plus
+     de default-user.xml : c'est ce fichier qui fait foi.
+
+     - password_sha256_hex = SHA256 de 'lorion03vel' (= CLICKHOUSE_PASSWORD du .env,
+       que l'init et les applis utilisent pour se connecter).
+       Régénérer : printf 'MON_MDP' | sha256sum
+     - access_management=1 : confère implicitement tous les droits (DDL + gestion).
+       Nécessaire pour que l'init (schema.sql + users-roles.sql) s'exécute sous
+       ce compte. Lecture seule via SQL (comme tout user XML).
+
+     On supprime aussi l'utilisateur 'default' (ouvert par défaut), comme le
+     faisait l'entrypoint, pour ne pas laisser d'accès anonyme.
+     ============================================================ -->
+<clickhouse>
+    <users>
+        <default remove="remove"></default>
+        <lorion03vel>
+            <password_sha256_hex>4a7a4a4373df7d70fbcac1529b71b6f5f4332951b5fd4d6bd7f079470b2d4686</password_sha256_hex>
+            <networks>
+                <ip>::/0</ip>
+                <ip>0.0.0.0/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+            <named_collection_control>1</named_collection_control>
+        </lorion03vel>
+    </users>
+</clickhouse>

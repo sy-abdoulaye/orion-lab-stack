@@ -1,0 +1,19 @@
+FROM registry.example.com/dockerhub/library/python:3.12-slim
+
+# Proxy uniquement pour le build (pip). Transmis en build-arg par compose.
+ARG http_proxy
+ARG https_proxy
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY common/ ./common/
+COPY reconciler/ ./reconciler/
+COPY admin/ ./admin/
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+CMD ["python", "-m", "reconciler.main"]

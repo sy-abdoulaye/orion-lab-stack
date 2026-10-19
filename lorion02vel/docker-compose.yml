@@ -1,0 +1,14 @@
+name: lorion02vel
+
+# Stacks de la VM lorion02vel. Chaque stack vit dans son dossier avec son
+# .env (sans secret) et ses secrets/ (hors git) — même organisation que
+# lorion03vel. Le réseau partagé lorion02vel-network est créé par `make up`
+# (cf. Makefile + ../common.mk), jamais par compose.
+include:
+  - path: grafana/compose.yml
+    env_file: grafana/.env
+
+networks:
+  lorion02vel-network:
+    name: lorion02vel-network
+    external: true

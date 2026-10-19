@@ -1,0 +1,47 @@
+# Adaptations locales par-dessus le docker-compose.yml upstream (non modifié) :
+# - image locale `-plugins` buildée via le proxy d'entreprise
+# - port hôte 9998 (9999 = NetBox de PROD, /home/services, même hôte)
+# - restart: unless-stopped partout
+# - rattachement au réseau partagé de la VM (lorion03vel-network, external,
+#   créé par `make network` — cf. Makefile du dossier parent) : les futures
+#   stacks de la VM (gnmic, syncs...) pourront joindre NetBox par son nom.
+services:
+  netbox:
+    image: netbox:${VERSION-v4.5.4-4.0.1}-plugins
+    pull_policy: never
+    restart: unless-stopped
+    ports:
+      - 9998:8080 # 9999 est tenu par l'instance de PROD sur cet hôte
+    build:
+      context: .
+      dockerfile: Dockerfile-Plugins
+      args:
+        VERSION: ${VERSION:-v4.5.4-4.0.1}
+        HTTP_PROXY: ${http_proxy}
+        HTTPS_PROXY: ${https_proxy}
+        NO_PROXY: ${no_proxy}
+    networks:
+      - lorion03vel-network
+  netbox-worker:
+    image: netbox:${VERSION-v4.5.4-4.0.1}-plugins
+    pull_policy: never
+    restart: unless-stopped
+    networks:
+      - lorion03vel-network
+  postgres:
+    restart: unless-stopped
+    networks:
+      - lorion03vel-network
+  redis:
+    restart: unless-stopped
+    networks:
+      - lorion03vel-network
+  redis-cache:
+    restart: unless-stopped
+    networks:
+      - lorion03vel-network
+
+networks:
+  lorion03vel-network:
+    name: lorion03vel-network
+    external: true

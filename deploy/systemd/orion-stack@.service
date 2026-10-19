@@ -1,0 +1,32 @@
+# ============================================================
+# orion-stack@.service — démarre la stack Compose d'une VM au boot.
+#
+# Unit template : %i = nom du dossier de la VM dans le dépôt
+# (lorion01vel, lorion03vel, ...).
+#
+# Installation (sur chaque VM, en root) :
+#   cp deploy/systemd/orion-stack@.service /etc/systemd/system/
+#   # adapter WorkingDirectory/User si le dépôt n'est pas au chemin standard
+#   systemctl daemon-reload
+#   systemctl enable --now orion-stack@lorion03vel
+#
+# `make up` étant idempotent (réseau créé si absent, up -d), un start
+# sur une stack déjà démarrée est sans effet.
+# ============================================================
+[Unit]
+Description=Stack Orion %i (docker compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=asy
+WorkingDirectory=/home/asy/autoCOREBIB/orion-lab-stack/%i
+ExecStart=/usr/bin/make up
+ExecStop=/usr/bin/make down
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

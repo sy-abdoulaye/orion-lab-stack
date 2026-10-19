@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+
+# Topologie réelle du lab (copié depuis deploy/hosts.env.example)
+deploy/hosts.env
+
+# Secrets en clair (montés via compose `secrets:`) — jamais dans git
+**/secrets/
+
+# Logs locaux du chargement ClickHouse (cron hôte lorion01vel)
+lorion01vel/gobgp/scripts/*.log
+
+# .env réels (ne garder que les .env.example versionnés)
+**/.env
+!**/.env.example
+lorion03vel/netbox-docker/env/*.env
+!lorion03vel/netbox-docker/env/*.env.example
+
+# Notes perso / scratch
+cmd.md
+note.md
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store

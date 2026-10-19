@@ -1,0 +1,161 @@
+site_name: Orion Stack — Documentation
+site_description: >-
+  Documentation de la plateforme Orion — organisée par service : Neo4j, ClickHouse,
+  netbox-neo4j-sync, gobgp-neo4j-sync, gobgp, vector et NetBox.
+site_author: Backbone Solutions / Validation
+# Requis par `navigation.instant` (chargement type SPA). Le chemin (racine `/`) est
+# ce qui compte : à l'exécution, Material s'appuie sur l'origine du navigateur, donc
+# l'accès via n'importe quelle IP de l'hôte fonctionne (host/port ici sans importance).
+site_url: http://localhost:8090/
+docs_dir: docs
+
+theme:
+  name: material
+  language: fr
+  # Désactive Google Fonts : le navigateur n'a pas d'accès Internet -> évite un
+  # chargement bloquant. Material utilise alors la pile de polices système.
+  font: false
+  icon:
+    logo: material/graph-outline
+    repo: fontawesome/brands/git-alt
+  features:
+    # Navigation instantanée (type SPA) : pas de rechargement complet entre pages.
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - navigation.footer
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Passer au thème sombre
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Passer au thème clair
+
+extra_css:
+  - assets/extra.css
+
+# Mermaid hébergé en local (définit le global `mermaid`) : Material détecte le
+# global et n'appelle donc PAS le CDN unpkg.com -> rendu des diagrammes hors-ligne.
+extra_javascript:
+  - assets/js/mermaid.min.js
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  # Rend les icônes `:material-...:` / `:octicons-...:` (utilisées dans les cards).
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Accueil: index.md
+  - Architecture:
+      - Vue générale: architecture/overview.md
+      - Infrastructure: architecture/infrastructure.md
+      - Réseau: architecture/networking.md
+      - Sécurité: architecture/security.md
+      - Flux de données: architecture/data-flow.md
+      - Déploiement: architecture/deployment.md
+      - Roadmap: architecture/roadmap.md
+  - Services:
+      - Neo4j:
+          - Vue d'ensemble: services/neo4j/index.md
+          - Architecture: services/neo4j/architecture.md
+          - Configuration: services/neo4j/configuration.md
+          - Sécurité: services/neo4j/security.md
+          - Déploiement: services/neo4j/deployment.md
+          - Maintenance: services/neo4j/maintenance.md
+          - Monitoring: services/neo4j/monitoring.md
+          - Dépannage: services/neo4j/troubleshooting.md
+      - ClickHouse:
+          - Vue d'ensemble: services/clickhouse/index.md
+          - Architecture: services/clickhouse/architecture.md
+          - Configuration: services/clickhouse/configuration.md
+          - Sécurité: services/clickhouse/security.md
+          - Déploiement: services/clickhouse/deployment.md
+          - Maintenance: services/clickhouse/maintenance.md
+          - Monitoring: services/clickhouse/monitoring.md
+          - Dépannage: services/clickhouse/troubleshooting.md
+      - netbox-neo4j-sync:
+          - Vue d'ensemble: services/netbox-neo4j-sync/index.md
+          - Architecture: services/netbox-neo4j-sync/architecture.md
+          - Receiver (FastAPI): services/netbox-neo4j-sync/receiver.md
+          - Reconciler: services/netbox-neo4j-sync/reconciler.md
+          - CLI d'administration: services/netbox-neo4j-sync/admin-cli.md
+          - Modèle de données: services/netbox-neo4j-sync/data-model.md
+          - Configuration: services/netbox-neo4j-sync/configuration.md
+          - Sécurité: services/netbox-neo4j-sync/security.md
+          - Déploiement: services/netbox-neo4j-sync/deployment.md
+          - Dépannage: services/netbox-neo4j-sync/troubleshooting.md
+      - gobgp-neo4j-sync:
+          - Vue d'ensemble: services/gobgp-neo4j-sync/index.md
+          - Architecture: services/gobgp-neo4j-sync/architecture.md
+          - Modèle de données: services/gobgp-neo4j-sync/data-model.md
+          - Configuration: services/gobgp-neo4j-sync/configuration.md
+          - Déploiement: services/gobgp-neo4j-sync/deployment.md
+          - Dépannage: services/gobgp-neo4j-sync/troubleshooting.md
+      - gobgp:
+          - Vue d'ensemble: services/gobgp/index.md
+          - Architecture: services/gobgp/architecture.md
+          - Collecte des données: services/gobgp/collecte.md
+          - Déploiement: services/gobgp/deployment.md
+          - Dépannage: services/gobgp/troubleshooting.md
+      - vector:
+          - Vue d'ensemble: services/vector/index.md
+          - Pipeline: services/vector/pipeline.md
+          - Exploitation: services/vector/exploitation.md
+      - Grafana:
+          - Vue d'ensemble: services/grafana/index.md
+      - NetBox:
+          - Vue d'ensemble: services/netbox/index.md
+          - Architecture: services/netbox/architecture.md
+          - Intégration: services/netbox/integration.md
+          - PostgreSQL: services/netbox/postgresql.md
+          - Redis / Valkey: services/netbox/redis.md
+          - Worker (RQ): services/netbox/worker.md
+          - Configuration: services/netbox/configuration.md
+          - Sécurité: services/netbox/security.md
+          - Dépannage: services/netbox/troubleshooting.md
+  - Exploitation:
+      - Vue d'ensemble: operations/index.md
+      - Déploiement complet: operations/deployment.md
+      - Sauvegarde & restauration: operations/backup-restore.md
+      - Mises à jour & rollback: operations/updates.md
+      - Runbook: operations/runbook.md
+  - Monitoring: monitoring/index.md
+  - Troubleshooting: troubleshooting/index.md
+  - FAQ: faq/index.md

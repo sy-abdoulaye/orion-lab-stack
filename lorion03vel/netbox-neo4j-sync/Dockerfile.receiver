@@ -1,0 +1,20 @@
+FROM registry.example.com/dockerhub/library/python:3.12-slim
+
+# Proxy uniquement pour le build (pip). Transmis en build-arg par compose.
+ARG http_proxy
+ARG https_proxy
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY common/ ./common/
+COPY receiver/ ./receiver/
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+# Un seul worker Uvicorn : le client Neo4j est partagé en mémoire du process.
+# Pour scaler le débit, répliquer le conteneur plutôt qu'augmenter --workers.
+CMD ["uvicorn", "receiver.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

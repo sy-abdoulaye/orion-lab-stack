@@ -1,0 +1,96 @@
+# ============================================================
+# compose.yml — Stack de synchronisation NetBox -> Neo4j (DCIM cœur)
+# ============================================================
+# N'INCLUT NI NetBox NI Neo4j : ils tournent déjà. On s'y attache via le
+# réseau partagé de la VM (lorion03vel-network, external), où vivent tous les
+# services : Neo4j (bolt://lorion03vel-neo4j:7687), l'API NetBox
+# (http://netbox:8080) et le receiver, joignable par NetBox pour les webhooks.
+#
+# Architecture : webhooks directs (receiver) + reconciler périodique.
+# Aucune dépendance à RabbitMQ.
+#
+# Démarrage :
+#   cp .env.example .env   # puis renseigner token/secret/mot de passe
+#   docker compose build && docker compose up -d
+# ============================================================
+
+services:
+  receiver:
+    build:
+      context: .
+      dockerfile: Dockerfile.receiver
+      # Le build a besoin d'internet (PyPI) : le proxy est transmis en build-arg.
+      args:
+        http_proxy: ${BUILD_HTTP_PROXY:-}
+        https_proxy: ${BUILD_HTTPS_PROXY:-}
+    # Nom versionné explicite (namespace local "orion/", jamais le préfixe du
+    # miroir : pull-only). Bump IMAGE_TAG dans .env à chaque évolution ->
+    # l'ancienne image reste disponible pour un rollback.
+    image: orion/netbox-neo4j-sync-receiver:${IMAGE_TAG:-0.1.0}
+    container_name: netbox-neo4j-sync-receiver
+    restart: unless-stopped
+    env_file: .env
+    # Secrets lus depuis les fichiers montés (pattern *_FILE, cf. common/config.py) :
+    # le .env ne contient AUCUN secret et peut être versionné.
+    environment:
+      NETBOX_TOKEN_FILE: /run/secrets/netbox_token
+      WEBHOOK_SECRET_FILE: /run/secrets/webhook_secret
+      NEO4J_PASSWORD_FILE: /run/secrets/neo4j_password
+    secrets:
+      - netbox_token
+      - webhook_secret
+      - neo4j_password
+    # Pas de port publié sur l'hôte : NetBox appelle le receiver via le réseau
+    # partagé de la VM (alias `netbox-neo4j-sync-receiver:8000`).
+    # (Pour un debug hôte ponctuel, ajouter `ports: ["18000:8000"]`.)
+    networks:
+      - lorion03vel-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status==200 else 1)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  reconciler:
+    build:
+      context: .
+      dockerfile: Dockerfile.reconciler
+      args:
+        http_proxy: ${BUILD_HTTP_PROXY:-}
+        https_proxy: ${BUILD_HTTPS_PROXY:-}
+    image: orion/netbox-neo4j-sync-reconciler:${IMAGE_TAG:-0.1.0}
+    container_name: netbox-neo4j-sync-reconciler
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NETBOX_TOKEN_FILE: /run/secrets/netbox_token
+      WEBHOOK_SECRET_FILE: /run/secrets/webhook_secret
+      NEO4J_PASSWORD_FILE: /run/secrets/neo4j_password
+    secrets:
+      - netbox_token
+      - webhook_secret
+      - neo4j_password
+    networks:
+      - lorion03vel-network
+
+networks:
+  lorion03vel-network:
+    name: lorion03vel-network
+    external: true
+
+# Secrets en clair stockés hors git (./secrets/, chmod 600) — même pattern
+# que clickhouse/ et neo4j/.
+secrets:
+  netbox_token:
+    file: ./secrets/netbox_token
+  webhook_secret:
+    file: ./secrets/webhook_secret
+  neo4j_password:
+    file: ./secrets/neo4j_password

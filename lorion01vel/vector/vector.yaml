@@ -1,0 +1,268 @@
+# ============================================================
+# vector.yaml — Tail les CSV MONITOR__*.csv (flux d'événements BGP en
+# continu, append-only) et les envoie vers ClickHouse (gobgp, lorion03vel).
+#
+# Les CSV PROD__* (snapshots horaires) NE PASSENT PAS par Vector : ils
+# restent gérés par gobgp/scripts/load_clickhouse.sh + cron (voir ce
+# fichier pour le contexte des deux architectures différentes).
+# ============================================================
+
+data_dir: /var/lib/vector
+
+sources:
+  monitor_files:
+    type: file
+    include:
+      - /data/gobgp/MONITOR__*.csv
+    file_key: file
+    # MONITOR__bgp_ls_prefixeV4.csv et MONITOR__bgp_ls_prefixeV6.csv ont un
+    # header strictement identique -> checksum sur 1 seule ligne (défaut) les
+    # confond. On hash 2 lignes (header + 1re donnée) pour les distinguer.
+    # NB: la stratégie "device_and_inode" a été testée et écartée : elle perd/
+    # corrompt des données après troncature du fichier (bug constaté en test).
+    fingerprint:
+      strategy: checksum
+      lines: 2
+
+transforms:
+  route_monitor:
+    type: route
+    inputs: [monitor_files]
+    reroute_unmatched: false
+    route:
+      bgp_ipv4unicast: >-
+        .file == "/data/gobgp/MONITOR__bgp_ipv4Unicast.csv" &&
+        .message != "Family;Prefix;PrefixLen;Best;NeighborIp;SourceId;Asn;Age;Withdraw;Origin;AsPath;Med;LocalPref;Communities;ClusterList;OriginatorId;NextHops;AtomicAggregate;AggregatorAsn;AggregatorAddress"
+      bgp_ls_link: >-
+        .file == "/data/gobgp/MONITOR__bgp_ls_link.csv" &&
+        .message != "Family;Type;Best;NeighborIp;SourceId;Asn;Age;Withdraw;ProtocolID;LinkRemoteIgpRouterId;LinkRemoteOspfAreaId;LinkLinkLocalId;LinkLinkRemoteId;LinkInterfaceAddrIpv4;LinkNeighborAddrIpv4;LinkInterfaceAddrIpv6;LinkNeighborAddrIpv6;LinkLocalRouterId;LinkRemoteRouterId;LinkIgpMetric;LinkSrAdjacencySid;LinkDefaultTeMetric;LinkBandwidth"
+      bgp_ls_node: >-
+        .file == "/data/gobgp/MONITOR__bgp_ls_node.csv" &&
+        .message != "Family;Type;Best;NeighborIp;SourceId;Asn;Age;Withdraw;ProtocolID;NodeLocalIgpRouterId;NodeLocalBgpLsId;NodeName;NodeOverload;NodeRouterId;NodeIsisArea"
+      bgp_ls_prefixev4: >-
+        .file == "/data/gobgp/MONITOR__bgp_ls_prefixeV4.csv" &&
+        .message != "Family;Type;Best;NeighborIp;SourceId;Asn;Age;Withdraw;ProtocolID;PrefixeLocalIgpRouterId;PrefixeLocalBgpLsId;PrefixeLocalOspfAreaId;PrefixeIpReachability;PrefixeOspfRouteType"
+      bgp_ls_prefixev6: >-
+        .file == "/data/gobgp/MONITOR__bgp_ls_prefixeV6.csv" &&
+        .message != "Family;Type;Best;NeighborIp;SourceId;Asn;Age;Withdraw;ProtocolID;PrefixeLocalIgpRouterId;PrefixeLocalBgpLsId;PrefixeLocalOspfAreaId;PrefixeIpReachability;PrefixeOspfRouteType"
+      bgp_lu: >-
+        .file == "/data/gobgp/MONITOR__bgp_lu.csv" &&
+        .message != "Family;Prefix;PrefixLen;Label;GetCommunities;Best;NeighborIp;SourceId;Asn;Age;Withdraw;NextHops;OriginatorId;ClusterList;Origin;LocalPref;AsPath"
+      bgp_vpn: >-
+        .file == "/data/gobgp/MONITOR__bgp_vpn.csv" &&
+        .message != "Family;Prefix;Label;PrefixLen;Communities;Best;NeighborIp;SourceId;Asn;Age;Withdraw;RdAdmin;RdAssigned;Origin;AsPath;Med;LocalPref;ExtCommunities;ClusterList;OriginatorId;NextHops;Communities"
+
+  # Conversions défensives : certains attributs BGP optionnels (ex.
+  # AtomicAggregate) peuvent être vides plutôt que "true"/"false" ou un
+  # entier -> "==" et "?? 0" évitent de faire planter le transform (contrairement
+  # à to_bool!/to_int! qui lèvent une erreur sur une valeur inattendue).
+  parse_bgp_ipv4unicast:
+    type: remap
+    inputs: [route_monitor.bgp_ipv4unicast]
+    source: |
+      fields = split!(.message, ";")
+      . = {
+        "Family": fields[0], "Prefix": fields[1], "PrefixLen": to_int(fields[2]) ?? 0,
+        "Best": fields[3] == "true", "NeighborIp": fields[4], "SourceId": fields[5],
+        "Asn": to_int(fields[6]) ?? 0, "Age": fields[7], "Withdraw": fields[8] == "true",
+        "Origin": fields[9], "AsPath": fields[10], "Med": to_int(fields[11]) ?? 0,
+        "LocalPref": to_int(fields[12]) ?? 0, "Communities": fields[13], "ClusterList": fields[14],
+        "OriginatorId": fields[15], "NextHops": fields[16], "AtomicAggregate": fields[17] == "true",
+        "AggregatorAsn": to_int(fields[18]) ?? 0, "AggregatorAddress": fields[19]
+      }
+
+  parse_bgp_ls_link:
+    type: remap
+    inputs: [route_monitor.bgp_ls_link]
+    source: |
+      fields = split!(.message, ";")
+      . = {
+        "Family": fields[0], "Type": fields[1], "Best": fields[2] == "true",
+        "NeighborIp": fields[3], "SourceId": fields[4], "Asn": to_int(fields[5]) ?? 0,
+        "Age": fields[6], "Withdraw": fields[7] == "true", "ProtocolID": fields[8],
+        "LinkRemoteIgpRouterId": fields[9], "LinkRemoteOspfAreaId": fields[10],
+        "LinkLinkLocalId": fields[11], "LinkLinkRemoteId": fields[12],
+        "LinkInterfaceAddrIpv4": fields[13], "LinkNeighborAddrIpv4": fields[14],
+        "LinkInterfaceAddrIpv6": fields[15], "LinkNeighborAddrIpv6": fields[16],
+        "LinkLocalRouterId": fields[17], "LinkRemoteRouterId": fields[18],
+        "LinkIgpMetric": to_int(fields[19]) ?? 0, "LinkSrAdjacencySid": to_int(fields[20]) ?? 0,
+        "LinkDefaultTeMetric": to_int(fields[21]) ?? 0, "LinkBandwidth": to_int(fields[22]) ?? 0
+      }
+
+  parse_bgp_ls_node:
+    type: remap
+    inputs: [route_monitor.bgp_ls_node]
+    source: |
+      fields = split!(.message, ";")
+      . = {
+        "Family": fields[0], "Type": fields[1], "Best": fields[2] == "true",
+        "NeighborIp": fields[3], "SourceId": fields[4], "Asn": to_int(fields[5]) ?? 0,
+        "Age": fields[6], "Withdraw": fields[7] == "true", "ProtocolID": fields[8],
+        "NodeLocalIgpRouterId": fields[9], "NodeLocalBgpLsId": to_int(fields[10]) ?? 0,
+        "NodeName": fields[11], "NodeOverload": fields[12] == "true",
+        "NodeRouterId": fields[13], "NodeIsisArea": fields[14]
+      }
+
+  parse_bgp_ls_prefixev4:
+    type: remap
+    inputs: [route_monitor.bgp_ls_prefixev4]
+    source: |
+      fields = split!(.message, ";")
+      . = {
+        "Family": fields[0], "Type": fields[1], "Best": fields[2] == "true",
+        "NeighborIp": fields[3], "SourceId": fields[4], "Asn": to_int(fields[5]) ?? 0,
+        "Age": fields[6], "Withdraw": fields[7] == "true", "ProtocolID": fields[8],
+        "PrefixeLocalIgpRouterId": fields[9], "PrefixeLocalBgpLsId": to_int(fields[10]) ?? 0,
+        "PrefixeLocalOspfAreaId": to_int(fields[11]) ?? 0, "PrefixeIpReachability": fields[12],
+        "PrefixeOspfRouteType": fields[13]
+      }
+
+  parse_bgp_ls_prefixev6:
+    type: remap
+    inputs: [route_monitor.bgp_ls_prefixev6]
+    source: |
+      fields = split!(.message, ";")
+      . = {
+        "Family": fields[0], "Type": fields[1], "Best": fields[2] == "true",
+        "NeighborIp": fields[3], "SourceId": fields[4], "Asn": to_int(fields[5]) ?? 0,
+        "Age": fields[6], "Withdraw": fields[7] == "true", "ProtocolID": fields[8],
+        "PrefixeLocalIgpRouterId": fields[9], "PrefixeLocalBgpLsId": to_int(fields[10]) ?? 0,
+        "PrefixeLocalOspfAreaId": to_int(fields[11]) ?? 0, "PrefixeIpReachability": fields[12],
+        "PrefixeOspfRouteType": fields[13]
+      }
+
+  parse_bgp_lu:
+    type: remap
+    inputs: [route_monitor.bgp_lu]
+    source: |
+      fields = split!(.message, ";")
+      . = {
+        "Family": fields[0], "Prefix": fields[1], "PrefixLen": to_int(fields[2]) ?? 0,
+        "Label": to_int(fields[3]) ?? 0, "GetCommunities": fields[4], "Best": fields[5] == "true",
+        "NeighborIp": fields[6], "SourceId": fields[7], "Asn": to_int(fields[8]) ?? 0,
+        "Age": fields[9], "Withdraw": fields[10] == "true", "NextHops": fields[11],
+        "OriginatorId": fields[12], "ClusterList": fields[13], "Origin": fields[14],
+        "LocalPref": to_int(fields[15]) ?? 0, "AsPath": fields[16]
+      }
+
+  parse_bgp_vpn:
+    type: remap
+    inputs: [route_monitor.bgp_vpn]
+    source: |
+      fields = split!(.message, ";")
+      . = {
+        "Family": fields[0], "Prefix": fields[1], "Label": to_int(fields[2]) ?? 0,
+        "PrefixLen": to_int(fields[3]) ?? 0, "Communities": fields[4], "Best": fields[5] == "true",
+        "NeighborIp": fields[6], "SourceId": fields[7], "Asn": to_int(fields[8]) ?? 0,
+        "Age": fields[9], "Withdraw": fields[10] == "true", "RdAdmin": fields[11],
+        "RdAssigned": fields[12], "Origin": fields[13], "AsPath": fields[14],
+        "Med": to_int(fields[15]) ?? 0, "LocalPref": to_int(fields[16]) ?? 0, "ExtCommunities": fields[17],
+        "ClusterList": fields[18], "OriginatorId": fields[19], "NextHops": fields[20],
+        "Communities2": fields[21]
+      }
+
+sinks:
+  ch_bgp_ipv4unicast:
+    type: clickhouse
+    inputs: [parse_bgp_ipv4unicast]
+    endpoint: http://10.10.3.141:8123
+    database: gobgp
+    table: monitor_bgp_ipv4unicast
+    format: json_each_row
+    auth:
+      strategy: basic
+      user: gobgp_writer
+      password: "${CLICKHOUSE_PASSWORD}"
+    proxy:
+      no_proxy: ["10.10.3.141"]
+
+  ch_bgp_ls_link:
+    type: clickhouse
+    inputs: [parse_bgp_ls_link]
+    endpoint: http://10.10.3.141:8123
+    database: gobgp
+    table: monitor_bgp_ls_link
+    format: json_each_row
+    auth:
+      strategy: basic
+      user: gobgp_writer
+      password: "${CLICKHOUSE_PASSWORD}"
+    proxy:
+      no_proxy: ["10.10.3.141"]
+
+  ch_bgp_ls_node:
+    type: clickhouse
+    inputs: [parse_bgp_ls_node]
+    endpoint: http://10.10.3.141:8123
+    database: gobgp
+    table: monitor_bgp_ls_node
+    format: json_each_row
+    auth:
+      strategy: basic
+      user: gobgp_writer
+      password: "${CLICKHOUSE_PASSWORD}"
+    proxy:
+      no_proxy: ["10.10.3.141"]
+
+  ch_bgp_ls_prefixev4:
+    type: clickhouse
+    inputs: [parse_bgp_ls_prefixev4]
+    endpoint: http://10.10.3.141:8123
+    database: gobgp
+    table: monitor_bgp_ls_prefixev4
+    format: json_each_row
+    auth:
+      strategy: basic
+      user: gobgp_writer
+      password: "${CLICKHOUSE_PASSWORD}"
+    proxy:
+      no_proxy: ["10.10.3.141"]
+
+  ch_bgp_ls_prefixev6:
+    type: clickhouse
+    inputs: [parse_bgp_ls_prefixev6]
+    endpoint: http://10.10.3.141:8123
+    database: gobgp
+    table: monitor_bgp_ls_prefixev6
+    format: json_each_row
+    auth:
+      strategy: basic
+      user: gobgp_writer
+      password: "${CLICKHOUSE_PASSWORD}"
+    proxy:
+      no_proxy: ["10.10.3.141"]
+
+  ch_bgp_lu:
+    type: clickhouse
+    inputs: [parse_bgp_lu]
+    endpoint: http://10.10.3.141:8123
+    database: gobgp
+    table: monitor_bgp_lu
+    format: json_each_row
+    auth:
+      strategy: basic
+      user: gobgp_writer
+      password: "${CLICKHOUSE_PASSWORD}"
+    proxy:
+      no_proxy: ["10.10.3.141"]
+
+  ch_bgp_vpn:
+    type: clickhouse
+    inputs: [parse_bgp_vpn]
+    endpoint: http://10.10.3.141:8123
+    database: gobgp
+    table: monitor_bgp_vpn
+    format: json_each_row
+    auth:
+      strategy: basic
+      user: gobgp_writer
+      password: "${CLICKHOUSE_PASSWORD}"
+    proxy:
+      no_proxy: ["10.10.3.141"]
+
+  # console:
+  #   type: console
+  #   inputs: [parse_bgp_ls_prefixev6]
+  #   target: stdout
+  #   encoding:
+  #     codec: json

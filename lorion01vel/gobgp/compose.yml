@@ -1,0 +1,96 @@
+# ══════════════════════════════════════════════════════
+#  docker-compose.yml  –  Stack GoBGP BGP-LS
+#
+#  MODE TEST : coexiste avec le gobgpd systemd v3.37
+#  gobgpd container v4.1.0 : BGP sur 1790, gRPC sur 50051
+# Le daemon GoBGP est exposé sur le réseau hôte pour permettre une interaction directe avec les outils de gestion BGP externes.
+# Le cron intégré dans le container permet d'exécuter des tâches de maintenance régulières, telles que la rotation des logs ou la vérification de l'état du daemon.
+# Le volume dédié pour les logs garantit que les données de journalisation sont persistantes et facilement accessibles pour le diagnostic et la surveillance.
+# Le healthcheck assure que le service est opérationnel avant de permettre au client CLI de se connecter, améliorant ainsi la fiabilité de l'ensemble du stack.
+# Le logging est configuré pour limiter la taille des fichiers de log et le nombre de fichiers conservés, ce qui aide à gérer l'espace disque tout en conservant les informations nécessaires pour le dépannage.
+# Le réseau en mode hôte permet une communication directe avec les interfaces réseau de l'hôte, ce qui est essentiel pour les opérations BGP qui nécessitent une interaction avec d'autres routeurs et services sur le même réseau.
+# Le container est configuré pour redémarrer automatiquement en cas de panne, assurant ainsi une haute disponibilité du service BGP.
+# Le Dockerfile de gobgpd doit inclure l'installation de cron et la configuration nécessaire pour exécuter les tâches planifiées, ainsi que l'installation de GoBGP et la configuration de base du daemon.
+# Le Dockerfile de gobgp-cli doit inclure les outils nécessaires pour interagir avec le daemon GoBGP, ainsi que la configuration pour permettre une utilisation facile via des commandes docker exec.
+# ══════════════════════════════════════════════════════
+
+services:
+  # ── Daemon GoBGP + cron ───────────────────────────────
+  gobgpd:
+    build:
+      context: .
+      dockerfile: daemon/Dockerfile
+    # Nom versionné explicite (namespace local "orion/", jamais le préfixe du
+    # miroir : pull-only). Bump IMAGE_TAG dans .env à chaque évolution ->
+    # l'ancienne image reste disponible pour un rollback.
+    image: orion/gobgpd:${IMAGE_TAG:-0.1.0}
+    container_name: gobgp-daemon
+    restart: unless-stopped
+    # network_mode: host
+    # Coexistence avec le gobgpd prod (systemd) qui tient déjà 179 et 50051
+    # sur l'hôte : le container est joignable depuis l'extérieur sur
+    # 203.0.113.1:1790 (BGP) et :50052 (gRPC).
+    ports:
+      - "1790:179"
+      - "50052:50051"
+    healthcheck:
+      # Vérifie que le daemon GoBGP est opérationnel avant de permettre au client CLI de se connecter
+      # La commande de test utilise l'outil CLI de GoBGP pour interroger le statut global du daemon via gRPC, ce qui est un indicateur fiable de son bon fonctionnement.
+      # Le healthcheck est configuré pour s'exécuter toutes les 15 secondes, avec un timeout de 5 secondes, et il tentera de se reconnecter jusqu'à 3 fois avant de considérer le service comme non sain.
+      # De plus, un délai de démarrage de 10 secondes est prévu pour permettre au daemon de s'initialiser correctement avant que les vérifications ne commencent.
+      test:
+        ["CMD", "/opt/gobgp/gobgp", "-u", "127.0.0.1", "-p", "50051", "global"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      # Le logging est configuré pour limiter la taille des fichiers de log à 10 Mo et conserver jusqu'à 5 fichiers de log,
+      # ce qui aide à gérer l'espace disque tout en conservant les informations nécessaires pour le dépannage.
+      # L'utilisation du driver "json-file" permet de stocker les logs dans un format structuré, facilitant ainsi l'analyse et la gestion des logs générés par le daemon GoBGP.
+      # Cette configuration de logging est essentielle pour assurer une surveillance efficace du service BGP,
+      # en permettant aux administrateurs de suivre les événements et les erreurs sans risquer de saturer l'espace disque avec des logs volumineux.
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    volumes:
+      - ./logs:/var/log/gobgp
+    networks:
+      - lorion01vel-network
+
+  # ── Client CLI GoBGP (container permanent) ────────────
+  gobgp-cli:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+      args:
+        # Les variables d'environnement HTTP_PROXY et HTTPS_PROXY sont passées en tant qu'arguments de build pour
+        # permettre au Dockerfile de configurer correctement les outils de gestion BGP qui nécessitent un accès à Internet via un proxy.
+        HTTP_PROXY: ${HTTP_PROXY}
+        HTTPS_PROXY: ${HTTPS_PROXY}
+    image: orion/gobgp-cli:${IMAGE_TAG:-0.1.0}
+    container_name: gobgp-client
+    restart: unless-stopped
+    # network_mode: host
+    env_file:
+      - .env
+    depends_on:
+      gobgpd:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    volumes:
+      - ./data:/data/gobgp
+      - ./bin/bgpls:/opt/gobgp/bin
+      - ./.env:/etc/.env-ch
+    networks:
+      - lorion01vel-network
+
+networks:
+  lorion01vel-network:
+    name: lorion01vel-network
+    external: true

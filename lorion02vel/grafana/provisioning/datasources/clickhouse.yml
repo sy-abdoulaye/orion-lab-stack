@@ -1,0 +1,28 @@
+# ============================================================
+# Datasource ClickHouse (lorion03vel) — provisionnée au démarrage.
+#
+# Les $VARIABLES sont interpolées par Grafana depuis l'environnement du
+# conteneur (cf. compose.yml) ; le mot de passe vient du secret monté,
+# exporté par entrypoint-secrets.sh. `editable: false` : la datasource est
+# gérée ici (déclaratif), pas dans l'UI.
+# ============================================================
+apiVersion: 1
+
+datasources:
+  - name: ClickHouse (lorion03vel)
+    uid: clickhouse-lorion03vel
+    type: grafana-clickhouse-datasource
+    access: proxy
+    isDefault: true
+    editable: false
+    jsonData:
+      host: $CLICKHOUSE_GRAFANA_HOST
+      port: $CLICKHOUSE_GRAFANA_PORT
+      protocol: native
+      secure: false
+      username: $CLICKHOUSE_GRAFANA_USER
+      defaultDatabase: $CLICKHOUSE_GRAFANA_DB
+      dialTimeout: 10
+      queryTimeout: 60
+    secureJsonData:
+      password: $CLICKHOUSE_GRAFANA_PASSWORD

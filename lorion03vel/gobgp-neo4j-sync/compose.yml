@@ -1,0 +1,55 @@
+# ============================================================
+# compose.yml — Stack de synchronisation gobgp (ClickHouse) -> Neo4j
+# ============================================================
+# N'INCLUT NI ClickHouse NI Neo4j : ils tournent déjà ailleurs.
+#   - Neo4j : conteneur `lorion03vel-neo4j`, réseau lorion03vel-network
+#     (bolt://lorion03vel-neo4j:7687).
+#   - ClickHouse (base gobgp) : VM séparée (10.10.3.141:9000, protocole natif),
+#     hors Docker — voir lorion01vel/gobgp/scripts/load_clickhouse.sh.
+#
+# Architecture : un seul service reconciler, deux boucles internes (topologie
+# périodique + monitor incrémental). Pas de receiver : ClickHouse ne pousse rien.
+#
+# Démarrage :
+#   cp .env.example .env   # puis renseigner mot de passe ClickHouse/Neo4j
+#   docker compose build && docker compose up -d
+# ============================================================
+
+services:
+  reconciler-gobgp-neo4j:
+    build:
+      context: .
+      dockerfile: Dockerfile.reconciler
+      args:
+        http_proxy: ${BUILD_HTTP_PROXY:-}
+        https_proxy: ${BUILD_HTTPS_PROXY:-}
+    # Nom versionné explicite (namespace local "orion/", jamais le préfixe du
+    # miroir : pull-only). Bump IMAGE_TAG dans .env à chaque évolution ->
+    # l'ancienne image reste disponible pour un rollback.
+    image: orion/gobgp-neo4j-sync-reconciler:${IMAGE_TAG:-0.1.0}
+    container_name: gobgp-neo4j-sync-reconciler
+    restart: unless-stopped
+    env_file: .env
+    # Secrets lus depuis les fichiers montés (pattern *_FILE, cf. common/config.py) :
+    # le .env ne contient AUCUN secret et peut être versionné.
+    environment:
+      CLICKHOUSE_PASSWORD_FILE: /run/secrets/ch_gobgp_reader_password
+      NEO4J_PASSWORD_FILE: /run/secrets/neo4j_password
+    secrets:
+      - ch_gobgp_reader_password
+      - neo4j_password
+    networks:
+      - lorion03vel-network
+
+networks:
+  lorion03vel-network:
+    name: lorion03vel-network
+    external: true
+
+# Secrets en clair stockés hors git (./secrets/, chmod 600) — même pattern
+# que clickhouse/, neo4j/ et netbox-neo4j-sync/.
+secrets:
+  ch_gobgp_reader_password:
+    file: ./secrets/ch_gobgp_reader_password
+  neo4j_password:
+    file: ./secrets/neo4j_password

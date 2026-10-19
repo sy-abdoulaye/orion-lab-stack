@@ -1,0 +1,17 @@
+# ============================================================
+# Provider de dashboards : charge les JSON versionnés dans ../../dashboards/
+# (montés en lecture seule dans le conteneur). Un dashboard déposé dans ce
+# dossier du dépôt apparaît au prochain scan (10 s), sans redémarrage.
+# ============================================================
+apiVersion: 1
+
+providers:
+  - name: orion-lab
+    folder: Orion Lab
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 10
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true

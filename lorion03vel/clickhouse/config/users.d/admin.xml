@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!-- ============================================================
+     Utilisateur admin défini en XML (statique, mot de passe chiffré).
+     C'est le compte de gestion utilisé par manage-users.sh.
+
+     - password_sha256_hex : SHA256 du mot de passe en clair.
+       Pour le régénérer : printf 'MON_MDP' | sha256sum
+       (ici = SHA256 de 'pwd!', aligné avec CLICKHOUSE_ADMIN_PASSWORD du .env)
+     - access_management=1 : autorise CREATE/ALTER/DROP USER, ROLE, etc.
+       -> indispensable pour que manage-users.sh gère les utilisateurs SQL.
+
+     NB : un utilisateur défini en XML est en LECTURE SEULE via SQL.
+     manage-users.sh peut donc créer/gérer d'AUTRES utilisateurs (stockés en
+     SQL dans le volume), mais ne peut pas modifier "admin" lui-même.
+     ============================================================ -->
+<clickhouse>
+    <users>
+        <admin>
+            <password_sha256_hex>5ce41ada64f1e8ffb0acfaafa622b141438f3a5777785e7f0b830fb73e40d3d6</password_sha256_hex>
+            <networks>
+                <ip>::/0</ip>
+                <ip>0.0.0.0/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+            <named_collection_control>1</named_collection_control>
+        </admin>
+    </users>
+</clickhouse>

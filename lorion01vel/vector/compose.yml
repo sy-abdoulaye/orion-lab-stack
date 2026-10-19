@@ -1,0 +1,28 @@
+services:
+  vector:
+    # Image officielle via le miroir interne (préfixe paramétré : une seule
+    # variable à changer si le registre évolue).
+    image: ${REGISTRY:-registry.example.com/dockerhub}/timberio/vector:0.46.1-debian
+    container_name: lorion01vel-vector
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/docker-entrypoint-custom.sh"]
+    volumes:
+      # Lecture seule : les CSV MONITOR__*.csv générés par gobgp-client
+      - ../gobgp/data:/data/gobgp:ro
+      # Checkpoints du file source (offsets de lecture), pour ne pas
+      # ré-ingérer les lignes déjà envoyées après un redémarrage
+      - vector_data:/var/lib/vector
+      - ./vector.yaml:/etc/vector/vector.yaml:ro
+      - ./entrypoint.sh:/docker-entrypoint-custom.sh:ro
+      # Même credential que gobgp/scripts/load_clickhouse.sh (rôle role_gobgp_writer)
+      - ../gobgp/secrets/ch_gobgp_password:/run/secrets/ch_gobgp_password:ro
+    networks:
+      - lorion01vel-network
+
+volumes:
+  vector_data:
+
+networks:
+  lorion01vel-network:
+    name: lorion01vel-network
+    external: true
