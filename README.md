@@ -86,7 +86,7 @@ Le lab n'a pas d'accès Internet direct depuis les conteneurs : le proxy est pas
 
 ```bash
 docker run --rm -v "$PWD":/d -w /d \
-  -e http_proxy=http://93.17.134.150:3128 -e https_proxy=http://93.17.134.150:3128 \
+  -e http_proxy=http://<http-proxy>:<port> -e https_proxy=http://<http-proxy>:<port> \
   hub.valentine.sfr.com/dockerhub/library/python:3.12-slim \
   sh -c "pip install -r requirements.txt && mkdocs build --strict"
 ```
