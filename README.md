@@ -1,13 +1,13 @@
 # orion-stack-documentation
 
-Documentation d'entreprise de la plateforme **Orion** (`orion-lab-stack/lorion03vel`),
+Documentation de la plateforme **Orion** (`orion-lab-stack/lorion03vel`),
 construite avec [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) et
 organisée **par service**.
 
 > **Principe** : cette documentation ne décrit que l'implémentation **réelle** du projet
 > (fichiers `compose`, `Dockerfile`, `.env`, XML, scripts, code). Aucune configuration
 > n'est inventée. Les services planifiés mais non déployés sont regroupés dans la page
-> [Roadmap](docs/architecture/roadmap.md).
+> [Roadmap](orion-stack-documentation/docs//architecture/roadmap.md).
 
 ## Périmètre documenté
 
